@@ -82,7 +82,7 @@ reader.each_buffer(window_samples*10) do |buffer|
     [buffer.samples.pack(pack_code)]
   else
     :zip
-      .to_proc[*samples]
+      .to_proc[*buffer.samples]
       .map { |frames| frames.pack pack_code }
   end
 
