@@ -12,13 +12,13 @@ $CXX = 'g++'
 dirs = %w[webrtc/common_audio/signal_processing webrtc/common_audio/third_party webrtc/common_audio/vad]
 
 $srcs = [
-  'webrtcvad.cc',
-  *dirs.map { |d| Dir.glob "#{d}/*.c" }.flatten,
-  'webrtc/rtc_base/checks.cc'
+  'webrtcvad.c',
+  *dirs.map { |d| Dir.glob "#{$srcdir}/#{d}/*.c" }.flatten,
+  "#{$srcdir}/webrtc/rtc_base/checks.cc"
 ]
 
 $VPATH += dirs.map { |d| "$(srcdir)/#{d}" }
-$VPATH << 'webrtc/rtc_base'
+$VPATH << '$(srcdir)/webrtc/rtc_base'
 
 if RbConfig::CONFIG['host_os'] =~ /mswin|mingw|cygwin/
   $defs += %w[-D_WIN32 -DWEBRTC_WIN]
