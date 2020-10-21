@@ -35,7 +35,7 @@ parser = OptionParser.new do |opts|
   end
 
   opts.on('-a', '--agressiveness RAGE', (0..3).to_a.map(&:to_s), "Non-speech cutout agressiveness, default: #{options[:agressiveness]}") do |rage|
-    options[:aggressiveness] = rage.to_i
+    options[:agressiveness] = rage.to_i
   end
 
   opts.on('-w', '--window-duration MSEC', [10, 20, 30], "Size of floating window, 10, 20 or 30 ms, default: #{options[:window_duration_ms]}") do |window|
@@ -64,7 +64,7 @@ SPEECH = 1
 
 pack_code = WaveFile::PACK_CODES[reader.format.sample_format][reader.format.bits_per_sample]
 
-vad = WebRTC::Vad.new options[:aggressiveness]
+vad = WebRTC::Vad.new options[:agressiveness]
 
 marks = Array.new(reader.native_format.channels) { Array.new(options[:voting_pool_size]) { [0, NON_SPEECH] } }
 fragments = Array.new(reader.native_format.channels) { Array.new }
