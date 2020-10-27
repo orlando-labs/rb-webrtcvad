@@ -70,9 +70,10 @@ marks = Array.new(reader.native_format.channels) { Array.new(options[:voting_poo
 fragments = Array.new(reader.native_format.channels) { Array.new }
 offset = 0
 
+bytes_per_sample = reader.native_format.bits_per_sample / 8
 window_duration_ms = 30
 window_samples = reader.native_format.sample_rate * window_duration_ms / 1000
-window_bytes = window_samples * reader.native_format.bits_per_sample / 8
+window_bytes = window_samples * bytes_per_sample
 
 current_state = Array.new(reader.native_format.channels) { :non_speech }
 
@@ -93,7 +94,8 @@ reader.each_buffer(window_samples*10) do |buffer|
     end
     
     (0..buf.length).step(window_bytes).map.with_index do |window_start, i|
-      if buf.length - window_start < window_bytes and not vad.valid_frame?(reader.native_format.sample_rate, (buf.length - window_start).div(2))
+      remaining_samples = (buf.length - window_start).div(bytes_per_sample)
+      if buf.length - window_start < window_bytes and not vad.valid_frame?(reader.native_format.sample_rate, remaining_samples)
         remaining[channel] = buf[window_start..-1]
         next
       end
@@ -104,7 +106,7 @@ reader.each_buffer(window_samples*10) do |buffer|
           buf: buf, 
           sample_rate: reader.native_format.sample_rate,
           offset: window_start,
-          samples_count: window_samples
+          samples_count: [window_samples, remaining_samples].min
         )
       ]
 
