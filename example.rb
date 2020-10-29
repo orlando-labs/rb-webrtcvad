@@ -1,6 +1,7 @@
 require 'wavefile'
 require 'webrtcvad'
 require 'optparse'
+require 'stringio'
 
 options = {
   threshold: 0.9,
@@ -8,6 +9,8 @@ options = {
   window_duration_ms: 30,
   agressiveness: 3
 }
+
+Fragment = Struct.new :from, :to, :io, :writer
 
 parser = OptionParser.new do |opts|
   opts.banner = "Usage: #{$0} -f WAV_FILE [options]"
@@ -40,6 +43,10 @@ parser = OptionParser.new do |opts|
 
   opts.on('-w', '--window-duration MSEC', [10, 20, 30], "Size of floating window, 10, 20 or 30 ms, default: #{options[:window_duration_ms]}") do |window|
     options[:window_duration_ms] = window
+  end
+
+  opts.on('-s', '--save_fragments [DIR]', 'Save detected voice fragments, defaults to current directory') do |output_dir|
+    options[:output_dir] = output_dir || '.'
   end
 end
 
@@ -95,6 +102,8 @@ reader.each_buffer(window_samples*10) do |buffer|
     
     (0..buf.length).step(window_bytes).map.with_index do |window_start, i|
       remaining_samples = (buf.length - window_start).div(bytes_per_sample)
+      current_window_samples = [window_samples, remaining_samples].min
+
       if buf.length - window_start < window_bytes and not vad.valid_frame?(reader.native_format.sample_rate, remaining_samples)
         remaining[channel] = buf[window_start..-1]
         next
@@ -106,17 +115,31 @@ reader.each_buffer(window_samples*10) do |buffer|
           buf: buf, 
           sample_rate: reader.native_format.sample_rate,
           offset: window_start,
-          samples_count: [window_samples, remaining_samples].min
+          samples_count: current_window_samples
         )
       ]
 
       speech_slice = marks[channel].map(&:last).sum.to_f / options[:voting_pool_size]
       if current_state[channel] == :non_speech and speech_slice >= options[:threshold]
-        fragments[channel] << [marks[channel].first.first, nil]
+        fragment = Fragment.new marks[channel].first.first
+        if options[:output_dir]
+          fragment.io = StringIO.new
+          fragment.writer = WaveFile::Writer.new(fragment.io, WaveFile::Format.new(:mono, :pcm_16, reader.native_format.sample_rate))
+        end
+        fragments[channel] << fragment
         current_state[channel] = :speech
-      elsif current_state[channel] == :speech and speech_slice < options[:threshold]
-        fragments[channel][-1][1] = marks[channel].last.first #frags may overlap, it's ok
-        current_state[channel] = :non_speech
+      end
+      
+      if current_state[channel] == :speech
+        if speech_slice < options[:threshold]
+          fragments[channel].last.to = marks[channel].last.first #frags may overlap, it's ok
+          fragments[channel].last.writer.close if fragments[channel].last.writer
+          current_state[channel] = :non_speech
+        elsif options[:output_dir]
+          frames = buf[window_start, current_window_samples*bytes_per_sample].unpack pack_code
+          buffer = WaveFile::Buffer.new(frames, WaveFile::Format.new(:mono, :pcm_16, reader.native_format.sample_rate))
+          fragments[channel].last.writer.write buffer
+        end
       end
     end
   end
@@ -125,9 +148,26 @@ reader.each_buffer(window_samples*10) do |buffer|
 end
 
 # finalize open fragments
-fragments.each_with_index { |list, chan| list.last[1] ||= marks[chan].last.first }
+fragments.each_with_index do |list, chan|
+  next if list.last.to
+  list.last.to = marks[chan].last.first
+  list.last.writer.close if list.last.writer
+end
 
 puts "Found fragments:"
 fragments.each_with_index do |frags, chan|
-  puts "  Channel ##{chan}: #{frags}"
+  print_data = frags.map do |frag|
+    if frag.writer
+      filename = "fragment-#{chan}-#{frag.from}-#{frag.to}.wav"
+      frag.io.rewind
+      File.open(File.join(options[:output_dir], filename), 'wb') do |f|
+        f.puts(frag.io.read)
+      end
+      [frag.from, frag.to, filename]
+    else
+      [frag.from, frag.to]
+    end
+  end
+  puts "Channel ##{chan}:"
+  puts "  #{print_data}"
 end
