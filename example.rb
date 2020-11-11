@@ -75,7 +75,7 @@ vad = WebRTC::Vad.new options[:agressiveness]
 
 marks = Array.new(reader.native_format.channels) { Array.new(options[:voting_pool_size]) { [0, NON_SPEECH] } }
 fragments = Array.new(reader.native_format.channels) { Array.new }
-offset = 0
+offset_ms = 0
 
 bytes_per_sample = reader.native_format.bits_per_sample / 8
 window_duration_ms = 30
@@ -110,7 +110,7 @@ reader.each_buffer(window_samples*10) do |buffer|
       end
       marks[channel].rotate! 1
       marks[channel][-1] = [
-        offset + i * window_duration_ms, #ms
+        offset_ms + i * window_duration_ms, #ms
         vad.classify(
           buf: buf, 
           sample_rate: reader.native_format.sample_rate,
@@ -144,7 +144,7 @@ reader.each_buffer(window_samples*10) do |buffer|
     end
   end
   
-  offset += buffer.samples.count * 1000 / reader.native_format.sample_rate
+  offset_ms = samples.first.size / bytes_per_sample * 1000 / reader.native_format.sample_rate
 end
 
 # finalize open fragments
