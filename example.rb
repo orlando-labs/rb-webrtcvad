@@ -144,7 +144,7 @@ reader.each_buffer(window_samples*10) do |buffer|
     end
   end
   
-  offset_ms = samples.first.size / bytes_per_sample * 1000 / reader.native_format.sample_rate
+  offset_ms += samples.first.size / bytes_per_sample * 1000 / reader.native_format.sample_rate
 end
 
 # finalize open fragments
